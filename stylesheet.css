@@ -72,3 +72,14 @@ NOTE: please update `./config/users.css` with any new styles added here.
     border: 0; /* disable border to calm it down a bit */
     border-radius: 1px;
 }
+
+.pi-app-dock {
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+    padding: 4px;
+    spacing: 4px; /* Spacing between icons */
+    border-radius: 8px;
+}
+
+.pi-app-dock-icon {
+    icon-size: 32px; /* Default icon size, can be made configurable later */
+}

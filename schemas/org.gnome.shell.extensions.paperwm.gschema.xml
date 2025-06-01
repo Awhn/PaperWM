@@ -753,6 +753,32 @@
         <summary>Array of winprops as (JSON) string objects</summary>
     </key>
 
+    <key name="piappdock-enable" type="b">
+        <default>false</default>
+        <summary>Enable PI-AppDock</summary>
+        <description>Controls whether the PaperWM Integrated App Order Display (PI-AppDock) is enabled.</description>
+    </key>
+    <key name="piappdock-position" type="s">
+        <default>'bottom'</default>
+        <choices>
+            <choice value='bottom'/>
+            <choice value='left'/>
+            <choice value='right'/>
+        </choices>
+        <summary>PI-AppDock Position</summary>
+        <description>Sets the position of the PI-AppDock on the screen (e.g., bottom, left, or right).</description>
+    </key>
+    <key name="piappdock-icon-size" type="s">
+        <default>'medium'</default>
+        <choices>
+            <choice value='small'/>
+            <choice value='medium'/>
+            <choice value='large'/>
+        </choices>
+        <summary>PI-AppDock Icon Size</summary>
+        <description>Sets the size of the icons in the PI-AppDock.</description>
+    </key>
+
     <key type="b" name="gesture-enabled">
         <default>true</default>
         <summary>Enables PaperWM touchpad gestures</summary>

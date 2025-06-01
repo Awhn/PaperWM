@@ -7,7 +7,7 @@ import * as Util from 'resource:///org/gnome/shell/misc/util.js';
 
 import {
     Utils, Settings, Gestures, Keybindings, LiveAltTab, Navigator,
-    Stackoverlay, Scratch, Workspace, Tiling, Topbar, Patches, App, Grab
+    Stackoverlay, Scratch, Workspace, Tiling, Topbar, Patches, App, Grab, PIAppDock
 } from './imports.js';
 
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -49,10 +49,12 @@ export default class PaperWM extends Extension {
     modules = [
         Utils, Settings, Patches,
         Gestures, Keybindings, LiveAltTab, Navigator, Stackoverlay, Scratch,
-        Workspace, Tiling, Topbar, App, Grab,
+        Workspace, Tiling, Topbar, PIAppDock, App, Grab,
     ];
 
     #userStylesheet = null;
+    piAppDock = null;
+    _piappdockEnabledChangedId = 0;
 
     enable() {
         console.log(`#PaperWM enabled`);
@@ -62,15 +64,61 @@ export default class PaperWM extends Extension {
         // run enable method (with extension argument on all modules)
         this.modules.forEach(m => {
             if (m['enable']) {
+                // PIAppDock is handled separately due to constructor arguments and specific enable logic
+                if (m === PIAppDock) return;
                 m.enable(this);
             }
         });
+
+        // Instantiate and manage PIAppDock
+        // Ensure Tiling.spaces and Settings are available.
+        // Tiling and Settings modules are enabled in the loop above.
+        try {
+            if (Tiling.spaces && typeof PIAppDock.PIAppDock === 'function') {
+                this.piAppDock = new PIAppDock.PIAppDock(Tiling.spaces, this.getSettings());
+
+                if (this.getSettings().get_boolean('piappdock-enable')) {
+                    if (this.piAppDock) {
+                       this.piAppDock.enable();
+                    }
+                }
+
+                this._piappdockEnabledChangedId = this.getSettings().connect('changed::piappdock-enable', () => {
+                    if (this.getSettings().get_boolean('piappdock-enable')) {
+                        if (this.piAppDock && !this.piAppDock._visible) {
+                            this.piAppDock.enable();
+                        }
+                    } else {
+                        if (this.piAppDock && this.piAppDock._visible) {
+                            this.piAppDock.disable();
+                        }
+                    }
+                });
+            } else {
+                console.error("PaperWM: Tiling.spaces not available or PIAppDock.PIAppDock is not a constructor, PIAppDock will not be enabled.");
+            }
+        } catch (e) {
+            console.error(`PaperWM: Error enabling PIAppDock: ${e}`);
+        }
     }
 
     disable() {
         console.log('#PaperWM disabled');
         this.prepareForDisable();
+
+        // Disable PIAppDock first
+        if (this._piappdockEnabledChangedId) {
+            this.getSettings().disconnect(this._piappdockEnabledChangedId);
+            this._piappdockEnabledChangedId = 0;
+        }
+        if (this.piAppDock && this.piAppDock._visible) {
+            this.piAppDock.disable();
+        }
+        this.piAppDock = null;
+
         [...this.modules].reverse().forEach(m => {
+            // PIAppDock is handled separately
+            if (m === PIAppDock) return;
             if (m['disable']) {
                 m.disable();
             }

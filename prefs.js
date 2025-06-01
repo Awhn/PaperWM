@@ -504,6 +504,21 @@ class SettingsWidget {
         const aboutVersionView = this.builder.get_object('about_version_textView');
         aboutVersionView.set_wrap_mode(Gtk.WrapMode.WORD_CHAR);
         aboutVersionView.set_buffer(buffer);
+
+        // PI-AppDock Settings
+        booleanStateChanged('piappdock_enable_switch', 'piappdock-enable');
+
+        const piappDockPositionCombo = this.builder.get_object('piappdock_position_combo');
+        piappDockPositionCombo.set_active_id(this._settings.get_string('piappdock-position'));
+        piappDockPositionCombo.connect('changed', (obj) => {
+            this._settings.set_string('piappdock-position', obj.get_active_id());
+        });
+
+        const piappDockIconSizeCombo = this.builder.get_object('piappdock_icon_size_combo');
+        piappDockIconSizeCombo.set_active_id(this._settings.get_string('piappdock-icon-size'));
+        piappDockIconSizeCombo.connect('changed', (obj) => {
+            this._settings.set_string('piappdock-icon-size', obj.get_active_id());
+        });
     }
 
     /**

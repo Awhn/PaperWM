@@ -947,6 +947,121 @@
       </object>
     </child>
   </object>
+  <!-- PI-AppDock Settings Group -->
+  <child>
+    <object class="AdwPreferencesGroup" id="piappdock_settings_group">
+      <property name="title" translatable="yes">PI-AppDock Settings</property>
+      <child>
+        <object class="GtkListBoxRow">
+          <property name="activatable">false</property>
+          <child>
+            <object class="GtkGrid">
+              <property name="margin_start">12</property>
+              <property name="margin_end">12</property>
+              <property name="margin_top">6</property>
+              <property name="margin_bottom">6</property>
+              <property name="column_spacing">32</property>
+              <child>
+                <object class="GtkLabel">
+                  <property name="label" translatable="yes">Enable PI-AppDock</property>
+                  <property name="hexpand">true</property>
+                  <property name="xalign">0</property>
+                  <layout>
+                    <property name="column">0</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+              <child>
+                <object class="GtkSwitch" id="piappdock_enable_switch">
+                  <layout>
+                    <property name="column">1</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+            </object>
+          </child>
+        </object>
+      </child>
+      <child>
+        <object class="GtkListBoxRow">
+          <property name="activatable">false</property>
+          <child>
+            <object class="GtkGrid">
+              <property name="margin_start">12</property>
+              <property name="margin_end">12</property>
+              <property name="margin_top">6</property>
+              <property name="margin_bottom">6</property>
+              <property name="column_spacing">32</property>
+              <child>
+                <object class="GtkLabel">
+                  <property name="label" translatable="yes">Dock Position</property>
+                  <property name="hexpand">true</property>
+                  <property name="xalign">0</property>
+                  <layout>
+                    <property name="column">0</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+              <child>
+                <object class="GtkComboBoxText" id="piappdock_position_combo">
+                  <items>
+                    <item id="bottom" translatable="yes">Bottom</item>
+                    <item id="left" translatable="yes">Left</item>
+                    <item id="right" translatable="yes">Right</item>
+                  </items>
+                  <layout>
+                    <property name="column">1</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+            </object>
+          </child>
+        </object>
+      </child>
+      <child>
+        <object class="GtkListBoxRow">
+          <property name="activatable">false</property>
+          <child>
+            <object class="GtkGrid">
+              <property name="margin_start">12</property>
+              <property name="margin_end">12</property>
+              <property name="margin_top">6</property>
+              <property name="margin_bottom">6</property>
+              <property name="column_spacing">32</property>
+              <child>
+                <object class="GtkLabel">
+                  <property name="label" translatable="yes">Icon Size</property>
+                  <property name="hexpand">true</property>
+                  <property name="xalign">0</property>
+                  <layout>
+                    <property name="column">0</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+              <child>
+                <object class="GtkComboBoxText" id="piappdock_icon_size_combo">
+                  <items>
+                    <item id="small" translatable="yes">Small</item>
+                    <item id="medium" translatable="yes">Medium</item>
+                    <item id="large" translatable="yes">Large</item>
+                  </items>
+                  <layout>
+                    <property name="column">1</property>
+                    <property name="row">0</property>
+                  </layout>
+                </object>
+              </child>
+            </object>
+          </child>
+        </object>
+      </child>
+    </object>
+  </child>
   <object class="AdwPreferencesPage" id="workspaces_page">
     <property name="icon-name">view-list-symbolic</property>
     <property name="title" translatable="yes">Workspaces</property>
