@@ -108,16 +108,24 @@ var AppDock = class {
 
     _showDockActorInternal() {
         if (!this.actor) {
-            this._logError("Cannot show dock: actor does not exist. Main enable() might not have run or completed.");
+            this._logError("Cannot show dock: actor does not exist. This should not happen if enable() ran.");
             return;
         }
         this._log("Showing dock actor internally.");
-        this._applyPositionSetting(); // Ensure position and style are correct
+
+        if (!this._actorAddedToChrome) {
+            Main.layoutManager.addChrome(this.actor, { trackFullscreen: true });
+            this._actorAddedToChrome = true;
+            this._log("Actor added to chrome.");
+        }
+
+        this._applyPositionSetting();
         this.actor.show();
+
+        this._disconnectCurrentWorkspaceSignals();
         if (Tiling && Tiling.spaces) {
             let currentActiveSpace = Tiling.spaces.getActiveSpace();
             if (currentActiveSpace) {
-                this._disconnectCurrentWorkspaceSignals(); // Clear any existing before connecting
                 this._connectToWorkspaceSignals(currentActiveSpace);
             }
         }
@@ -126,11 +134,16 @@ var AppDock = class {
 
     _hideDockActorInternal() {
         if (!this.actor) {
-            this._logError("Cannot hide dock: actor does not exist.");
+            // this._log("Cannot hide dock: actor does not exist. Nothing to do."); // Less alarming log
             return;
         }
         this._log("Hiding dock actor internally.");
         this.actor.hide();
+        if (this._actorAddedToChrome) {
+            Main.layoutManager.removeChrome(this.actor);
+            this._actorAddedToChrome = false;
+            this._log("Actor removed from chrome.");
+        }
         this._disconnectCurrentWorkspaceSignals();
     }
 
@@ -180,11 +193,8 @@ var AppDock = class {
     enable() {
         this._log("Main enable() called for AppDock.");
 
-        // Read current enabled state immediately
-        this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
-
         if (!this.actor) {
-            this._log("Actor not yet created. Initializing...");
+            this._log("Actor not yet created. Initializing actor instance.");
             this.actor = new St.BoxLayout({
                 name: 'piAppDock',
                 vertical: false,
@@ -195,21 +205,13 @@ var AppDock = class {
                 vertical: false,
             });
             this.actor.add_child(this.iconContainer);
-            // Note: _applyPositionSetting will be called by _showDockActorInternal or if dock is initially enabled
+            // DO NOT add to chrome here initially. _actorAddedToChrome remains false.
         } else {
-            this._log("Actor already exists.");
+            this._log("Actor instance already exists.");
         }
 
-        if (!this._actorAddedToChrome) {
-            Main.layoutManager.addChrome(this.actor, { trackFullscreen: true });
-            this._actorAddedToChrome = true;
-            this._log("Actor added to chrome.");
-        } else {
-            this._log("Actor was already added to chrome.");
-        }
-
-        // Load CSS (should be safe to call multiple times if theme context handles it)
-        if (!this._themeContext) { // Load theme only once or if previously unloaded
+        // Load CSS (idempotent check)
+        if (!this._themeContext) {
             this._themeContext = St.ThemeContext.get_for_stage(global.stage);
             const extensionStylesheet = Me.path + '/app_dock.css';
             try {
@@ -217,39 +219,48 @@ var AppDock = class {
                 if (file.query_exists(null)) {
                     this._themeContext.get_theme().load_stylesheet(file);
                     this._log('app_dock.css loaded.');
-                } else {
-                    this._logError('app_dock.css not found.');
-                }
-            } catch (e) {
-                this._logError(`Error loading app_dock.css: ${e.message}`);
-            }
+                } else { this._logError('app_dock.css not found.'); }
+            } catch (e) { this._logError(`Error loading app_dock.css: ${e.message}`); }
         }
 
-        // Connect to Tiling.spaces for workspace switches (idempotent via _connectSignal)
-        this._connectSignal(Tiling.spaces, 'switch-workspace', this._onWorkspaceSwitched.bind(this));
+        // Connect non-workspace specific signals (settings are in constructor)
+        // Ensure Tiling.spaces signal is connected ONCE.
+        // Use a flag or check if already in this._signals to prevent duplicate connection if enable is called multiple times by shell.
+        if (!this._signals.has(`Tiling.spaces-switch-workspace`)) { // Example of a unique ID for this connection
+             const sigId = this._connectSignal(Tiling.spaces, 'switch-workspace', this._onWorkspaceSwitched.bind(this));
+             if (sigId) this._signals.set(`Tiling.spaces-switch-workspace`, Tiling.spaces); // Track it with a unique key
+        }
 
+        // Check current GSetting and show/hide accordingly
+        this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
         if (this._piAppDockEnabled) {
-            this._log("Dock is enabled by setting. Showing...");
+            this._log("Dock is enabled by GSetting. Showing via _showDockActorInternal...");
             this._showDockActorInternal();
         } else {
-            this._log("Dock is disabled by setting. Hiding...");
-            this._hideDockActorInternal(); // Ensures it's hidden if created but setting is false
+            this._log("Dock is disabled by GSetting. Ensuring it's hidden via _hideDockActorInternal...");
+            this._hideDockActorInternal(); // Ensures it's hidden and removed from chrome if it was somehow added
         }
         this._log("AppDock enable() process complete.");
     }
 
     disable() {
         this._log("Disabling AppDock");
+        this._hideDockActorInternal(); // Ensures actor is hidden and removed from chrome
+
+        this._disconnectCurrentWorkspaceSignals(); // Called by _hideDockActorInternal, but good to be explicit if flow changes
+        this._disconnectAllSignals();
+
         if (this.actor) {
-            if (this._actorAddedToChrome) {
-                Main.layoutManager.removeChrome(this.actor);
-                this._actorAddedToChrome = false;
-                this._log("Actor removed from chrome.");
+            try {
+                this.actor.destroy();
+                this._log("Actor destroyed.");
+            } catch (e) {
+                this._logError(`Error destroying actor: ${e.message}`);
             }
-            this.actor.destroy();
-            this.actor = null;
         }
+        this.actor = null;
         this.iconContainer = null;
+        this._actorAddedToChrome = false; // Reset flag
 
         if (this._themeContext) {
             const extensionStylesheet = Me.path + '/app_dock.css';
@@ -259,14 +270,9 @@ var AppDock = class {
                     this._themeContext.get_theme().unload_stylesheet(file);
                     this._log('app_dock.css unloaded.');
                 }
-            } catch (e) {
-                this._logError(`Error unloading app_dock.css: ${e.message}`);
-            }
-            this._themeContext = null; // Reset theme context
+            } catch (e) { this._logError(`Error unloading app_dock.css: ${e.message}`); }
+            this._themeContext = null;
         }
-
-        this._disconnectCurrentWorkspaceSignals();
-        this._disconnectAllSignals(); // Disconnects Tiling.spaces and settings signals
         this._log("AppDock disabled and cleaned up.");
     }
 
