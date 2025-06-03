@@ -4,7 +4,7 @@ const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
 const Gtk = imports.gi.Gtk;
 const Gdk = imports.gi.Gdk;
-// const Adw = imports.gi.Adw; // Removed Adwaita Import
+const Adw = imports.gi.Adw; // Ensure Adwaita Import
 
 const ExtensionUtils = imports.misc.extensionUtils;
 const Extension = ExtensionUtils.getCurrentExtension();
@@ -861,71 +861,37 @@ function fillPreferencesWindow(window) {
     let selectedTab = selectedWorkspace !== null ? 1 : 0;
     new SettingsWidget(window, selectedTab, selectedWorkspace || 0);
 
-    // Add PI-AppDock Preferences using Gtk Widgets
+    // Refactor PI-AppDock Preferences to use Adwaita containers with Gtk inputs
     const settings = Convenience.getSettings();
 
-    const dockPageBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 18,
-        margin_top: 10,
-        margin_bottom: 10,
-        margin_start: 10,
-        margin_end: 10
+    const dockPage = new Adw.PreferencesPage({
+        title: 'PI-AppDock',
+        icon_name: 'view-multiple-symbolic', // Or another suitable icon
     });
+    window.add(dockPage); // Assuming 'window' is the Adw.PreferencesWindow
 
-    // Assuming 'window' can add a Gtk.Widget as a page/tab.
-    // If 'window' is a Gtk.Notebook or Gtk.Stack, this is typical.
-    // For Adw.PreferencesWindow, this new Gtk.Box would appear as a direct child,
-    // potentially not using the Adwaita page styling unless wrapped appropriately.
-    // Given the goal is to replace Adw.PreferencesPage, we add it directly.
-    // If window is Gtk.Stack: window.add_titled(dockPageBox, 'pi_app_dock_page', 'PI-AppDock');
-    // If window is Gtk.Notebook: window.append_page(dockPageBox, new Gtk.Label({ label: 'PI-AppDock' }));
-    // For simplicity, if 'add' is the common method for Adw.PreferencesWindow to add Adw.PreferencesPage,
-    // we'll use a generic 'add' or 'append' that Gtk.Window might support, or adapt if a specific container type for 'window' is known.
-    // Let's assume 'window.add' works for adding a new top-level section if it's an Adw.PreferencesWindow,
-    // or that 'window' is a Gtk.Container that can simply append.
-    if (typeof window.add_titled === 'function') {
-         window.add_titled(dockPageBox, 'pi_app_dock_page', 'PI-AppDock');
-    } else if (typeof window.append_page === 'function') { // Gtk.Notebook
-         window.append_page(dockPageBox, new Gtk.Label({ label: 'PI-AppDock' }));
-    } else { // Fallback, might not look like a 'page' but will add the widgets
-         window.add(dockPageBox);
-    }
-
-
-    const dockGroupFrame = new Gtk.Frame({
-        label: 'PI-AppDock Settings',
-        margin_bottom: 12
+    const dockGroup = new Adw.PreferencesGroup({
+        title: 'PI-AppDock Settings',
     });
-    const dockGroup = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
-        margin_top: 6,
-        margin_bottom: 6,
-        margin_start: 6,
-        margin_end: 6
-    });
-    dockGroupFrame.set_child(dockGroup);
-    dockPageBox.append(dockGroupFrame);
+    dockPage.add(dockGroup);
 
-    // Enable/Disable Switch
-    let enableRow = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_top: 6, margin_bottom: 6 });
-    let enableLabel = new Gtk.Label({ label: 'Enable PI-AppDock', hexpand: true, xalign: 0 });
+    // Enable/Disable Setting (using Adw.ActionRow and Gtk.Switch)
+    let enableRow = new Adw.ActionRow({ title: 'Enable PI-AppDock' });
     let enableSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER });
-    enableRow.append(enableLabel);
-    enableRow.append(enableSwitch);
+    enableRow.add_suffix(enableSwitch);
+    enableRow.activatable_widget = enableSwitch;
     settings.bind(Settings.PI_APP_DOCK_ENABLED_KEY, enableSwitch, 'active', Gio.SettingsBindFlags.DEFAULT);
-    dockGroup.append(enableRow);
+    dockGroup.add(enableRow);
 
-    // Position ComboBoxText
-    let positionRowBox = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_top: 6, margin_bottom: 6 });
-    let positionLabel = new Gtk.Label({ label: 'Dock Position', hexpand: true, xalign: 0 });
+    // Position Setting (using Adw.ActionRow and Gtk.ComboBoxText)
+    let positionRow = new Adw.ActionRow({ title: 'Dock Position' });
     let positionCombo = new Gtk.ComboBoxText();
     const positions = [{id: 'bottom', title: 'Bottom'}, {id: 'left', title: 'Left'}, {id: 'right', title: 'Right'}];
     positions.forEach(p => positionCombo.append(p.id, p.title));
-    positionRowBox.append(positionLabel);
-    positionRowBox.append(positionCombo);
+    positionRow.add_suffix(positionCombo);
+    positionRow.activatable_widget = positionCombo;
 
+    // Two-way binding for Gtk.ComboBoxText
     const currentPosition = settings.get_string(Settings.PI_APP_DOCK_POSITION_KEY);
     positionCombo.set_active_id(currentPosition);
     positionCombo.connect('changed', () => {
@@ -940,17 +906,16 @@ function fillPreferencesWindow(window) {
             positionCombo.set_active_id(newPosition);
         }
     });
-    dockGroup.append(positionRowBox);
+    dockGroup.add(positionRow);
 
-    // Icon Size ComboBoxText
-    let iconSizeRowBox = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_top: 6, margin_bottom: 6 });
-    let iconSizeLabel = new Gtk.Label({ label: 'Icon Size', hexpand: true, xalign: 0 });
+    // Icon Size Setting (using Adw.ActionRow and Gtk.ComboBoxText)
+    let iconSizeRow = new Adw.ActionRow({ title: 'Icon Size' });
     let iconSizeCombo = new Gtk.ComboBoxText();
     const iconSizes = [{id: 'small', title: 'Small'}, {id: 'medium', title: 'Medium'}, {id: 'large', title: 'Large'}];
     iconSizes.forEach(s => iconSizeCombo.append(s.id, s.title));
-    iconSizeRowBox.append(iconSizeLabel);
-    iconSizeRowBox.append(iconSizeCombo);
-
+    iconSizeRow.add_suffix(iconSizeCombo);
+    iconSizeRow.activatable_widget = iconSizeCombo;
+    // Two-way binding for Gtk.ComboBoxText
     const currentIconSize = settings.get_string(Settings.PI_APP_DOCK_ICON_SIZE_KEY);
     iconSizeCombo.set_active_id(currentIconSize);
     iconSizeCombo.connect('changed', () => {
@@ -965,5 +930,5 @@ function fillPreferencesWindow(window) {
             iconSizeCombo.set_active_id(newIconSize);
         }
     });
-    dockGroup.append(iconSizeRowBox);
+    dockGroup.add(iconSizeRow);
 }
