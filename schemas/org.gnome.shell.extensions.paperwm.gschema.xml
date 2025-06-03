@@ -1,3 +1,11 @@
+<!--
+IMPORTANT: If you modify this file, you MUST recompile the GNOME schemas for the changes to take effect.
+Typically, this is done by navigating to the 'schemas' directory in a terminal and running:
+    glib-compile-schemas .
+Or, if a Makefile is present (as it is in PaperWM):
+    make
+Failure to do so will result in GSettings errors, such as keys not being found.
+-->
 <schemalist>
 
   <!-- Keybindings -->
