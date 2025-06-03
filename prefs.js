@@ -4,6 +4,7 @@ const GLib = imports.gi.GLib;
 const GObject = imports.gi.GObject;
 const Gtk = imports.gi.Gtk;
 const Gdk = imports.gi.Gdk;
+const Adw = imports.gi.Adw;
 
 const ExtensionUtils = imports.misc.extensionUtils;
 const Extension = ExtensionUtils.getCurrentExtension();
@@ -859,4 +860,92 @@ function fillPreferencesWindow(window) {
 
     let selectedTab = selectedWorkspace !== null ? 1 : 0;
     new SettingsWidget(window, selectedTab, selectedWorkspace || 0);
+
+    // Add PI-AppDock Preferences Page
+    const settings = Convenience.getSettings(); // Already used in SettingsWidget, ensure it's the same instance or re-fetch
+
+    const dockPage = new Adw.PreferencesPage({
+        title: 'PI-AppDock',
+        icon_name: 'view-multiple-symbolic', // Or any other suitable icon
+    });
+    window.add(dockPage);
+
+    const dockGroup = new Adw.PreferencesGroup({
+        title: 'PI-AppDock Settings',
+    });
+    dockPage.add(dockGroup);
+
+    // Enable/Disable Switch
+    let switchDockEnabled = new Adw.SwitchRow({ title: 'Enable PI-AppDock' });
+    settings.bind(Settings.PI_APP_DOCK_ENABLED_KEY, switchDockEnabled, 'active', Gio.SettingsBindFlags.DEFAULT);
+    dockGroup.add(switchDockEnabled);
+
+    // Position ComboRow
+    let positionModel = new Gtk.StringList();
+    positionModel.append('bottom');
+    positionModel.append('left');
+    positionModel.append('right');
+    let positionRow = new Adw.ComboRow({
+        title: 'Dock Position',
+        model: positionModel,
+    });
+    // Bind 'selected' to an integer representing the index in the StringList.
+    // We need a custom binding function or a way to map string settings to index.
+    // GSettings.bind with 'selected-item' is tricky for Gtk.StringList as it expects Gtk.StringObject.
+    // For now, let's set initial value and listen for changes to manually update setting.
+    // A more robust solution might involve a custom GObject wrapper or more complex binding.
+    const currentPosition = settings.get_string(Settings.PI_APP_DOCK_POSITION_KEY);
+    const positions = ['bottom', 'left', 'right'];
+    let initialPositionIndex = positions.indexOf(currentPosition);
+    if (initialPositionIndex === -1) initialPositionIndex = 0; // Default to 'bottom'
+    positionRow.selected = initialPositionIndex;
+
+    positionRow.connect('notify::selected', () => {
+        const selectedIdx = positionRow.selected;
+        if (selectedIdx >= 0 && selectedIdx < positions.length) {
+            settings.set_string(Settings.PI_APP_DOCK_POSITION_KEY, positions[selectedIdx]);
+        }
+    });
+    // Also listen for GSetting changes to update the ComboRow if changed elsewhere
+    // This creates a two-way manual binding.
+    // Consider using a helper for this if doing it often.
+    settings.connect(`changed::${Settings.PI_APP_DOCK_POSITION_KEY}`, () => {
+        const newPosition = settings.get_string(Settings.PI_APP_DOCK_POSITION_KEY);
+        const newIndex = positions.indexOf(newPosition);
+        if (newIndex !== -1 && positionRow.selected !== newIndex) {
+            positionRow.selected = newIndex;
+        }
+    });
+    dockGroup.add(positionRow);
+
+    // Icon Size ComboRow
+    let iconSizeModel = new Gtk.StringList();
+    iconSizeModel.append('small');
+    iconSizeModel.append('medium');
+    iconSizeModel.append('large');
+    let iconSizeRow = new Adw.ComboRow({
+        title: 'Icon Size',
+        model: iconSizeModel,
+    });
+    // Similar binding challenge as above for string values.
+    const currentIconSize = settings.get_string(Settings.PI_APP_DOCK_ICON_SIZE_KEY);
+    const iconSizes = ['small', 'medium', 'large'];
+    let initialIconSizeIndex = iconSizes.indexOf(currentIconSize);
+    if (initialIconSizeIndex === -1) initialIconSizeIndex = 1; // Default to 'medium'
+    iconSizeRow.selected = initialIconSizeIndex;
+
+    iconSizeRow.connect('notify::selected', () => {
+        const selectedIdx = iconSizeRow.selected;
+        if (selectedIdx >= 0 && selectedIdx < iconSizes.length) {
+            settings.set_string(Settings.PI_APP_DOCK_ICON_SIZE_KEY, iconSizes[selectedIdx]);
+        }
+    });
+    settings.connect(`changed::${Settings.PI_APP_DOCK_ICON_SIZE_KEY}`, () => {
+        const newIconSize = settings.get_string(Settings.PI_APP_DOCK_ICON_SIZE_KEY);
+        const newIndex = iconSizes.indexOf(newIconSize);
+        if (newIndex !== -1 && iconSizeRow.selected !== newIndex) {
+            iconSizeRow.selected = newIndex;
+        }
+    });
+    dockGroup.add(iconSizeRow);
 }

@@ -408,6 +408,32 @@
         <summary>Array of winprops as (JSON) string objects</summary>
     </key>
 
+    <key name='pi-app-dock-enabled' type='b'>
+      <default>true</default>
+      <summary>Enable PI-AppDock</summary>
+      <description>Show or hide the PaperWM Integrated App Order Display.</description>
+    </key>
+    <key name='pi-app-dock-position' type='s'>
+      <choices>
+        <choice value='bottom'/>
+        <choice value='left'/>
+        <choice value='right'/>
+      </choices>
+      <default>'bottom'</default>
+      <summary>PI-AppDock Position</summary>
+      <description>Sets the position of the PI-AppDock on the screen (bottom, left, or right).</description>
+    </key>
+    <key name='pi-app-dock-icon-size' type='s'>
+      <choices>
+        <choice value='small'/>
+        <choice value='medium'/>
+        <choice value='large'/>
+      </choices>
+      <default>'medium'</default>
+      <summary>PI-AppDock Icon Size</summary>
+      <description>Sets the size of the icons in the PI-AppDock (small, medium, or large).</description>
+    </key>
+
     <child name="keybindings" schema="org.gnome.Shell.Extensions.PaperWM.Keybindings"/>
     <child name="workspaces" schema="org.gnome.Shell.Extensions.PaperWM.WorkspaceList"/>
 

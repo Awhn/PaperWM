@@ -31,15 +31,31 @@ var KEYBINDINGS_KEY = 'org.gnome.Shell.Extensions.PaperWM.Keybindings';
 var META_KEY_ABOVE_TAB = 0x2f7259c9;
 
 var prefs = {};
+const PI_APP_DOCK_ENABLED = 'pi-app-dock-enabled';
+const PI_APP_DOCK_POSITION = 'pi-app-dock-position';
+const PI_APP_DOCK_ICON_SIZE = 'pi-app-dock-icon-size';
+
 ['window-gap', 'vertical-margin', 'vertical-margin-bottom', 'horizontal-margin',
  'workspace-colors', 'default-background', 'animation-time', 'use-workspace-name',
  'pressure-barrier', 'default-show-top-bar', 'swipe-sensitivity', 'swipe-friction',
- 'cycle-width-steps', 'cycle-height-steps', 'topbar-follow-focus', 'minimap-scale', 
- 'winprops', 'show-workspace-indicator', 'show-window-position-bar', 'show-focus-mode-icon', 
- 'disable-topbar-styling', 'default-focus-mode']
+ 'cycle-width-steps', 'cycle-height-steps', 'topbar-follow-focus', 'minimap-scale',
+ 'winprops', 'show-workspace-indicator', 'show-window-position-bar', 'show-focus-mode-icon',
+ 'disable-topbar-styling', 'default-focus-mode',
+ PI_APP_DOCK_ENABLED, PI_APP_DOCK_POSITION, PI_APP_DOCK_ICON_SIZE]
     .forEach((k) => setState(null, k));
 
 prefs.__defineGetter__("minimum_margin", function() { return Math.min(15, this.horizontal_margin) });
+
+var PI_APP_DOCK_ICON_SIZE_MAP = {
+    small: 24,
+    medium: 32,
+    large: 48
+};
+
+prefs.__defineGetter__("pi_app_dock_icon_pixel_size", function() {
+    const sizeKey = this[PI_APP_DOCK_ICON_SIZE.replace(/-/g, '_')]; // Access the unpacked key name
+    return PI_APP_DOCK_ICON_SIZE_MAP[sizeKey] || PI_APP_DOCK_ICON_SIZE_MAP.medium; // Default to medium if key is invalid
+});
 
 function setVerticalMargin() {
     let vMargin = settings.get_int('vertical-margin');
@@ -443,3 +459,9 @@ function reloadWinpropsFromGSettings() {
     removeGSettingWinpropsFromArray();
     addWinpropsFromGSettings();
 }
+
+// Exports for app_dock.js
+var PI_APP_DOCK_ENABLED_KEY = PI_APP_DOCK_ENABLED;
+var PI_APP_DOCK_POSITION_KEY = PI_APP_DOCK_POSITION;
+var PI_APP_DOCK_ICON_SIZE_KEY = PI_APP_DOCK_ICON_SIZE;
+var ICON_SIZE_MAP = PI_APP_DOCK_ICON_SIZE_MAP; // Export the map as well

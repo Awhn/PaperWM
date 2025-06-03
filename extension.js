@@ -1,4 +1,5 @@
 const { St } = imports.gi;
+const ExtensionUtils = imports.misc.extensionUtils;
 
 // polyfill workspace_manager that was introduced in 3.30 (must happen before modules are imported)
 if (!global.workspace_manager) {
@@ -81,15 +82,16 @@ var initRun = false;
 var enabled = false;
 let lastDisabledTime = 0; // init (epoch ms)
 
-var Extension, convenience;
+var Extension, convenience, AppDock, appDockInstance;
 function init() {
     SESSIONID += "#";
     log(`#paperwm init: ${SESSIONID}`);
 
     // var Gio = imports.gi.Gio;
     // let extfile = Gio.file_new_for_path( Extension.imports.extension.__file__);
-    Extension = imports.misc.extensionUtils.getCurrentExtension();
+    Extension = ExtensionUtils.getCurrentExtension();
     convenience = Extension.imports.convenience;
+    AppDock = Extension.imports.app_dock.AppDock;
 
     warnAboutGnomeShellVersionCompatibility();
 
@@ -99,6 +101,20 @@ function init() {
     }
 
     initUserConfig();
+
+    if (appDockInstance) { // If re-init, ensure old instance is handled if necessary
+        log("#paperwm Re-initializing, potential AppDock instance leak if not handled in disable");
+        // Assuming disable is called properly before re-init
+    }
+    appDockInstance = new AppDock();
+    if (appDockInstance && typeof appDockInstance.init === 'function') {
+        try {
+            log("#paperwm init AppDock");
+            appDockInstance.init();
+        } catch(e) {
+            errorNotification("PaperWM", `Error during AppDock init: ${e.message}`, e.stack);
+        }
+    }
 
     if (run('init'))
         initRun = true;
@@ -111,8 +127,17 @@ function enable() {
         return;
     }
 
-    if (run('enable'))
+    if (run('enable')) {
         enabled = true;
+        if (appDockInstance && typeof appDockInstance.enable === 'function') {
+            try {
+                log("#paperwm enable AppDock");
+                appDockInstance.enable();
+            } catch(e) {
+                errorNotification("PaperWM", `Error during AppDock enable: ${e.message}`, e.stack);
+            }
+        }
+    }
 }
 
 function disable() {
@@ -134,10 +159,25 @@ function disable() {
         return;
     }
 
+    // Disable AppDock first
+    if (appDockInstance && typeof appDockInstance.disable === 'function') {
+        try {
+            log("#paperwm disable AppDock");
+            appDockInstance.disable();
+        } catch(e) {
+            errorNotification("PaperWM", `Error during AppDock disable: ${e.message}`, e.stack);
+        }
+    }
+    // appDockInstance = null; // Release the instance
+
     if (run('disable')) {
         enabled = false;
         lastDisabledTime = Date.now();
     }
+    // It might be better to nullify appDockInstance here, after it's fully disabled
+    // and other modules are also disabled.
+    // However, if init can be called multiple times without disable, this could be an issue.
+    // Given the existing initRun guard, it seems disable is expected to be called.
 }
 
 

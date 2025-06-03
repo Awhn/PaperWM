@@ -1,0 +1,47 @@
+.pi-app-dock {
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+    padding: 4px;
+    border-radius: 8px 8px 0 0; /* Rounded top corners for a bottom dock */
+    /* For initial testing, let's assume it's at the bottom */
+    /* Positioning will be made dynamic with settings later */
+    /* This is a placeholder for addChrome, actual position is managed by Shell */
+}
+
+.pi-app-dock-icon-container {
+    spacing: 6px; /* Spacing between icons */
+}
+
+.pi-app-dock-icon {
+    /* Icon size is primarily controlled by St.Icon's icon_size property,
+       but you can add padding or other visual tweaks here if needed. */
+}
+
+.pi-app-dock-button {
+    padding: 2px;
+    border-radius: 4px;
+    /* Remove default button styling if needed */
+    border: none;
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.pi-app-dock-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.pi-app-dock-button:active {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.pi-app-dock-bottom {
+    border-radius: 8px 8px 0 0;
+    /* Potentially: left: 50%; transform: translateX(-50%); bottom: 0; position: fixed; */
+}
+.pi-app-dock-left {
+    border-radius: 0 8px 8px 0;
+    /* Potentially: left: 0; top: 50%; transform: translateY(-50%); position: fixed; */
+}
+.pi-app-dock-right {
+    border-radius: 8px 0 0 8px;
+    /* Potentially: right: 0; top: 50%; transform: translateY(-50%); position: fixed; */
+}
