@@ -465,3 +465,4 @@ var PI_APP_DOCK_ENABLED_KEY = PI_APP_DOCK_ENABLED;
 var PI_APP_DOCK_POSITION_KEY = PI_APP_DOCK_POSITION;
 var PI_APP_DOCK_ICON_SIZE_KEY = PI_APP_DOCK_ICON_SIZE;
 var ICON_SIZE_MAP = PI_APP_DOCK_ICON_SIZE_MAP; // Export the map as well
+var actualGioSettings = settings; // Export the actual Gio.Settings instance

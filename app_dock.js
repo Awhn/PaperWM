@@ -11,7 +11,7 @@ var AppDock = class {
         this.iconContainer = null; // Actor to hold the icons
         this._signals = new Map(); // To store signal connections
 
-        this._settings = Settings.prefs; // Assuming 'prefs' is the settings instance from settings.js
+        this._settings = Settings.actualGioSettings; // Use the exported Gio.Settings instance
         this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
         this._currentPosition = this._settings.get_string(Settings.PI_APP_DOCK_POSITION_KEY);
         this._currentIconSizeKey = this._settings.get_string(Settings.PI_APP_DOCK_ICON_SIZE_KEY);
