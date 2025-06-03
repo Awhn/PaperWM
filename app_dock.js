@@ -11,6 +11,7 @@ var AppDock = class {
         this.iconContainer = null; // Actor to hold the icons
         this._signals = new Map(); // To store signal connections
         this._currentWorkspaceSignalIds = new Map(); // For workspace-specific signals
+        this._actorAddedToChrome = false;
 
         this._settings = Settings.actualGioSettings; // Use the exported Gio.Settings instance
         this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
@@ -79,11 +80,15 @@ var AppDock = class {
 
     _onEnableChanged() {
         this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
-        this._log(`PI-AppDock enabled setting changed to: ${this._piAppDockEnabled}`);
-        if (this._piAppDockEnabled) {
-            this._showDockActor();
+        this._log(`PI-AppDock enabled GSetting changed to: ${this._piAppDockEnabled}`);
+        if (this.actor) { // Only act if actor has been initialized by enable()
+            if (this._piAppDockEnabled) {
+                this._showDockActorInternal();
+            } else {
+                this._hideDockActorInternal();
+            }
         } else {
-            this._hideDockActor();
+            this._log("Dock actor not yet initialized, enable() will handle visibility based on this new setting.");
         }
     }
 
@@ -101,23 +106,32 @@ var AppDock = class {
         this._updateDock(); // Re-render icons with new size
     }
 
-    _showDockActor() {
-        if (this.actor) {
-            this.actor.show();
-        } else {
-            // If enable() was skipped due to initial setting, we need to create actor now.
-            // This logic assumes 'enable()' will now proceed if _piAppDockEnabled is true.
-            this._log("Attempting to enable and show dock actor as it was not previously created.");
-            this.enable(); // This will call _applyPositionSetting and show the actor.
+    _showDockActorInternal() {
+        if (!this.actor) {
+            this._logError("Cannot show dock: actor does not exist. Main enable() might not have run or completed.");
+            return;
         }
-        this._log("Dock actor shown.");
+        this._log("Showing dock actor internally.");
+        this._applyPositionSetting(); // Ensure position and style are correct
+        this.actor.show();
+        if (Tiling && Tiling.spaces) {
+            let currentActiveSpace = Tiling.spaces.getActiveSpace();
+            if (currentActiveSpace) {
+                this._disconnectCurrentWorkspaceSignals(); // Clear any existing before connecting
+                this._connectToWorkspaceSignals(currentActiveSpace);
+            }
+        }
+        this._updateDock();
     }
 
-    _hideDockActor() {
-        if (this.actor) {
-            this.actor.hide();
+    _hideDockActorInternal() {
+        if (!this.actor) {
+            this._logError("Cannot hide dock: actor does not exist.");
+            return;
         }
-        this._log("Dock actor hidden.");
+        this._log("Hiding dock actor internally.");
+        this.actor.hide();
+        this._disconnectCurrentWorkspaceSignals();
     }
 
     // Re-introducing _workspaceSignalIds and _disconnectWorkspaceSignals as per the detailed plan
@@ -164,94 +178,74 @@ var AppDock = class {
     // And `enable` connects to initial workspace.
 
     enable() {
-        // Called when the extension is enabled
-        this._log("Enabling AppDock");
+        this._log("Main enable() called for AppDock.");
 
-        if (!this._piAppDockEnabled) {
-            this._log("AppDock is disabled by setting, skipping actor creation.");
-            // Ensure actor is hidden if it somehow exists or was shown before setting changed
-            if (this.actor) this.actor.hide();
-            return;
-        }
+        // Read current enabled state immediately
+        this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
 
-        if (this.actor) {
-             // Actor already exists, likely from _showDockActor calling enable()
-             this._applyPositionSetting(); // Ensure position is correct
-             this.actor.show();
-             this._updateDock();
-             this._log("AppDock re-enabled or already enabled and configured.");
-             return;
-        }
-
-        // Create the main actor for the dock
-        this.actor = new St.BoxLayout({
-            name: 'piAppDock',
-            // style_class will be set by _applyPositionSetting
-            vertical: false,
-        });
-
-        this.iconContainer = new St.BoxLayout({
-            name: 'piAppDockIconContainer',
-            style_class: 'pi-app-dock-icon-container',
-            vertical: false, // Will be adjusted by _applyPositionSetting
-        });
-        this.actor.add_child(this.iconContainer);
-
-        this._applyPositionSetting(); // Set initial position and style_class
-        Main.layoutManager.addChrome(this.actor, { trackFullscreen: true });
-
-
-        // TODO: Connect to signals from tiling.js for window changes
-        // Example: this._connectSignal(Tiling.spaces, 'window-added', this._updateDock.bind(this));
-        // Example: this._connectSignal(Tiling.spaces, 'window-removed', this._updateDock.bind(this));
-        // Example: this._connectSignal(Tiling.spaces, 'layout-changed', this._updateDock.bind(this)); // Or a more specific signal
-
-        this._themeContext = St.ThemeContext.get_for_stage(global.stage);
-        const extensionStylesheet = Me.path + '/app_dock.css';
-        try {
-            let file = Gio.file_new_for_path(extensionStylesheet);
-            if (file.query_exists(null)) {
-                this._themeContext.get_theme().load_stylesheet(file);
-                this._log('app_dock.css loaded.');
-            } else {
-                this._logError('app_dock.css not found.');
-            }
-        } catch (e) {
-            this._logError(`Error loading app_dock.css: ${e.message}`);
-        }
-
-        // Persistent connection for workspace switches
-        if (Tiling && Tiling.spaces) {
-            this._connectSignal(Tiling.spaces, 'switch-workspace', this._onWorkspaceSwitched.bind(this));
+        if (!this.actor) {
+            this._log("Actor not yet created. Initializing...");
+            this.actor = new St.BoxLayout({
+                name: 'piAppDock',
+                vertical: false,
+            });
+            this.iconContainer = new St.BoxLayout({
+                name: 'piAppDockIconContainer',
+                style_class: 'pi-app-dock-icon-container',
+                vertical: false,
+            });
+            this.actor.add_child(this.iconContainer);
+            // Note: _applyPositionSetting will be called by _showDockActorInternal or if dock is initially enabled
         } else {
-            this._logError('Tiling.spaces not available to connect switch-workspace signal.');
+            this._log("Actor already exists.");
         }
 
-        // Connect to signals for the initially active workspace
-        if (Tiling && Tiling.spaces) {
-            let currentActiveSpace = Tiling.spaces.getActiveSpace();
-            if (currentActiveSpace) {
-                this._connectToWorkspaceSignals(currentActiveSpace);
-            } else {
-                this._logError('No active space found on enable to connect workspace signals.');
+        if (!this._actorAddedToChrome) {
+            Main.layoutManager.addChrome(this.actor, { trackFullscreen: true });
+            this._actorAddedToChrome = true;
+            this._log("Actor added to chrome.");
+        } else {
+            this._log("Actor was already added to chrome.");
+        }
+
+        // Load CSS (should be safe to call multiple times if theme context handles it)
+        if (!this._themeContext) { // Load theme only once or if previously unloaded
+            this._themeContext = St.ThemeContext.get_for_stage(global.stage);
+            const extensionStylesheet = Me.path + '/app_dock.css';
+            try {
+                let file = Gio.file_new_for_path(extensionStylesheet);
+                if (file.query_exists(null)) {
+                    this._themeContext.get_theme().load_stylesheet(file);
+                    this._log('app_dock.css loaded.');
+                } else {
+                    this._logError('app_dock.css not found.');
+                }
+            } catch (e) {
+                this._logError(`Error loading app_dock.css: ${e.message}`);
             }
         }
 
-        this._updateDock(); // Initial population of the dock
+        // Connect to Tiling.spaces for workspace switches (idempotent via _connectSignal)
+        this._connectSignal(Tiling.spaces, 'switch-workspace', this._onWorkspaceSwitched.bind(this));
 
         if (this._piAppDockEnabled) {
-            this.actor.show();
+            this._log("Dock is enabled by setting. Showing...");
+            this._showDockActorInternal();
         } else {
-            this.actor.hide(); // Should not happen if check at start of enable() is effective
+            this._log("Dock is disabled by setting. Hiding...");
+            this._hideDockActorInternal(); // Ensures it's hidden if created but setting is false
         }
-        this._log("AppDock enabled process complete.");
+        this._log("AppDock enable() process complete.");
     }
 
     disable() {
-        // Called when the extension is disabled
         this._log("Disabling AppDock");
         if (this.actor) {
-            Main.layoutManager.removeChrome(this.actor);
+            if (this._actorAddedToChrome) {
+                Main.layoutManager.removeChrome(this.actor);
+                this._actorAddedToChrome = false;
+                this._log("Actor removed from chrome.");
+            }
             this.actor.destroy();
             this.actor = null;
         }
@@ -268,12 +262,12 @@ var AppDock = class {
             } catch (e) {
                 this._logError(`Error unloading app_dock.css: ${e.message}`);
             }
-            this._themeContext = null;
+            this._themeContext = null; // Reset theme context
         }
 
-        this._disconnectCurrentWorkspaceSignals(); // Explicitly disconnect current workspace signals
-        this._disconnectAllSignals(); // Disconnect all other signals (like the Tiling.spaces switch-workspace itself)
-        this._log("AppDock disabled");
+        this._disconnectCurrentWorkspaceSignals();
+        this._disconnectAllSignals(); // Disconnects Tiling.spaces and settings signals
+        this._log("AppDock disabled and cleaned up.");
     }
 
     _updateDock() {
@@ -347,17 +341,12 @@ var AppDock = class {
 
     _applyPositionSetting() {
         if (!this.actor) return;
-
-        // If actor is already in chrome, remove it before changing properties that might affect layout
-        if (this.actor.get_parent() === Main.layoutManager.uiGroup) { // Heuristic check if added to chrome
-             Main.layoutManager.removeChrome(this.actor);
-        }
+        // Main.layoutManager.removeChrome(this.actor); // REMOVE THIS LINE
 
         let vertical = (this._currentPosition === 'left' || this._currentPosition === 'right');
         this.actor.vertical = vertical;
         this.iconContainer.vertical = vertical;
 
-        // Basic style changes; more complex positioning might need different panel boxes or strut properties
         if (this._currentPosition === 'bottom') {
             this.actor.style_class = 'pi-app-dock pi-app-dock-bottom';
         } else if (this._currentPosition === 'left') {
@@ -365,13 +354,8 @@ var AppDock = class {
         } else if (this._currentPosition === 'right') {
             this.actor.style_class = 'pi-app-dock pi-app-dock-right';
         }
-
-        // Add back to chrome if it was removed, or if this is the first time.
-        // Avoid duplicate adding if it wasn't removed (e.g. initial setup path)
-        if (this.actor.get_parent() !== Main.layoutManager.uiGroup) {
-            Main.layoutManager.addChrome(this.actor, { trackFullscreen: true /*, affectsStruts: true, etc. */ });
-        }
-        this._log(`Dock position applied: ${this._currentPosition}, vertical: ${vertical}`);
+        // Main.layoutManager.addChrome(this.actor, { trackFullscreen: true }); // REMOVE THIS LINE
+        this._log(`Dock position properties applied: ${this._currentPosition}, vertical: ${vertical}`);
     }
 
     _connectSignal(source, eventName, callback) {
