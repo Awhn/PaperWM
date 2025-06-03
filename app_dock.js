@@ -10,6 +10,7 @@ var AppDock = class {
         this.actor = null; // The main actor for the dock
         this.iconContainer = null; // Actor to hold the icons
         this._signals = new Map(); // To store signal connections
+        this._currentWorkspaceSignalIds = new Map(); // For workspace-specific signals
 
         this._settings = Settings.actualGioSettings; // Use the exported Gio.Settings instance
         this._piAppDockEnabled = this._settings.get_boolean(Settings.PI_APP_DOCK_ENABLED_KEY);
@@ -27,6 +28,53 @@ var AppDock = class {
     init() {
         // Called when the extension is initialized
         // TODO: Perform any one-time setup
+    }
+
+    _disconnectCurrentWorkspaceSignals() {
+        this._log(`Disconnecting ${this._currentWorkspaceSignalIds.size} signals from previously active workspace.`);
+        this._currentWorkspaceSignalIds.forEach((source, id) => {
+            try {
+                source.disconnect(id);
+                // Remove from the main _signals map as well, since _connectSignal added it there.
+                if (this._signals.has(id)) {
+                    this._signals.delete(id);
+                }
+            } catch (e) {
+                this._logError(`Error disconnecting workspace signal id ${id}: ${e.message}`);
+            }
+        });
+        this._currentWorkspaceSignalIds.clear();
+    }
+
+    _connectToWorkspaceSignals(activeSpace) {
+        if (!activeSpace) {
+            this._logError("Cannot connect to workspace signals: activeSpace is null");
+            return;
+        }
+        this._log(`Connecting to signals for workspace: ${activeSpace.workspace.index()}`);
+
+        let w_added_id = this._connectSignal(activeSpace, 'window-added', this._updateDock.bind(this));
+        let w_removed_id = this._connectSignal(activeSpace, 'window-removed', this._updateDock.bind(this));
+        let layout_id = this._connectSignal(activeSpace, 'layout', this._updateDock.bind(this));
+
+        if(w_added_id) this._currentWorkspaceSignalIds.set(w_added_id, activeSpace);
+        if(w_removed_id) this._currentWorkspaceSignalIds.set(w_removed_id, activeSpace);
+        if(layout_id) this._currentWorkspaceSignalIds.set(layout_id, activeSpace);
+
+        this._log(`Connected to window-added, window-removed, layout signals for workspace ${activeSpace.workspace.index()}. Tracked ${this._currentWorkspaceSignalIds.size} signals.`);
+    }
+
+    _onWorkspaceSwitched() {
+        this._log("Workspace switched event received.");
+        this._disconnectCurrentWorkspaceSignals(); // Disconnect from old workspace
+
+        if (Tiling && Tiling.spaces) {
+            let activeSpace = Tiling.spaces.getActiveSpace();
+            if (activeSpace) {
+                this._connectToWorkspaceSignals(activeSpace);
+            }
+        }
+        this._updateDock(); // Update dock for new workspace
     }
 
     _onEnableChanged() {
@@ -71,6 +119,49 @@ var AppDock = class {
         }
         this._log("Dock actor hidden.");
     }
+
+    // Re-introducing _workspaceSignalIds and _disconnectWorkspaceSignals as per the detailed plan
+    // if we want to correctly disconnect from old workspace on switch.
+    // Constructor change:
+    // this._workspaceSignalIds = new Map();
+
+    // _disconnectWorkspaceSignals() {
+    //     this._workspaceSignalIds.forEach((source, id) => {
+    //         try {
+    //             source.disconnect(id);
+    //         } catch (e) {
+    //             this._logError(`Error disconnecting workspace signal id ${id}: ${e.message}`);
+    //         }
+    //     });
+    //     this._workspaceSignalIds.clear();
+    //     this._log("Disconnected all workspace-specific signals");
+    // }
+    // And _connectToWorkspaceSignals would use this._workspaceSignalIds.set(...)
+    // And _onWorkspaceSwitched would call _disconnectWorkspaceSignals() first.
+    // And disable() would also call _disconnectWorkspaceSignals().
+
+    // For THIS iteration, sticking to the "simpler" path means _onWorkspaceSwitched just updates the dock.
+    // And _connectToWorkspaceSignals is called once in enable() for the *initial* active space.
+    // This means dock icons ONLY update for the initial workspace's events unless switch-workspace also updates.
+
+    // Let's refine _onWorkspaceSwitched to be more robust with the current _connectSignal
+    // It should disconnect signals connected by _connectToWorkspaceSignals for the *previous* space.
+    // This is where a tagging or separate management in _connectSignal would be useful.
+    // Since _connectSignal doesn't support that, we will have to assume _disconnectAllSignals
+    // is the only cleanup point, or _updateDock is smart enough.
+
+    // Per the prompt's structure, let's re-add the separate workspace signal management.
+    // This means the constructor needs this._workspaceSignalIds = new Map();
+    // And _connectToWorkspaceSignals needs to use it.
+    // And _disconnectWorkspaceSignals needs to be defined.
+    // And _onWorkspaceSwitched calls _disconnectWorkspaceSignals.
+    // And disable calls _disconnectWorkspaceSignals.
+
+    // The alternative in the prompt was:
+    // _connectToWorkspaceSignals using this._connectSignal. If so, _workspaceSignalIds and _disconnectWorkspaceSignals are not needed.
+    // Let's re-verify the chosen path: "I will choose the alternative for _connectToWorkspaceSignals that uses the existing this._connectSignal helper."
+    // This means _onWorkspaceSwitched does NOT call a specific disconnect. Relies on _updateDock getting current space.
+    // And `enable` connects to initial workspace.
 
     enable() {
         // Called when the extension is enabled
@@ -129,30 +220,21 @@ var AppDock = class {
             this._logError(`Error loading app_dock.css: ${e.message}`);
         }
 
-        try {
-            if (Tiling && Tiling.spaces) {
-                this._log('Tiling module and spaces object seem accessible.');
-                let activeSpace = Tiling.spaces.getActiveSpace();
-                if (activeSpace) {
-                    this._log('Active space obtained.');
-                    let windows = activeSpace.getWindows();
-                    this._log(`Found ${windows.length} windows in active space.`);
-                } else {
-                    this._logError('Could not get active space.');
-                }
+        // Persistent connection for workspace switches
+        if (Tiling && Tiling.spaces) {
+            this._connectSignal(Tiling.spaces, 'switch-workspace', this._onWorkspaceSwitched.bind(this));
+        } else {
+            this._logError('Tiling.spaces not available to connect switch-workspace signal.');
+        }
 
-                // Test connecting to switch-workspace signal
-                this._connectSignal(Tiling.spaces, 'switch-workspace', () => {
-                    this._log('Successfully received switch-workspace signal from Tiling.spaces');
-                    // In a real scenario, we would update the dock here
-                });
-                this._log('Attempted to connect to Tiling.spaces switch-workspace signal.');
-
+        // Connect to signals for the initially active workspace
+        if (Tiling && Tiling.spaces) {
+            let currentActiveSpace = Tiling.spaces.getActiveSpace();
+            if (currentActiveSpace) {
+                this._connectToWorkspaceSignals(currentActiveSpace);
             } else {
-                this._logError('Tiling module or spaces object is not accessible.');
+                this._logError('No active space found on enable to connect workspace signals.');
             }
-        } catch (e) {
-            this._logError(`Error accessing Tiling module or its properties: ${e.message}`);
         }
 
         this._updateDock(); // Initial population of the dock
@@ -189,7 +271,8 @@ var AppDock = class {
             this._themeContext = null;
         }
 
-        this._disconnectAllSignals();
+        this._disconnectCurrentWorkspaceSignals(); // Explicitly disconnect current workspace signals
+        this._disconnectAllSignals(); // Disconnect all other signals (like the Tiling.spaces switch-workspace itself)
         this._log("AppDock disabled");
     }
 
@@ -230,12 +313,22 @@ var AppDock = class {
     }
 
     _getOrderedWindows() {
-        // TODO: Implement actual logic to get ordered windows from Tiling.js
-        // This will likely involve accessing Tiling.spaces.getActiveSpace().getWindows()
-        // or a similar mechanism, and then processing that list.
-        // The order should match PaperWM's window order.
-        this._log("Fetching ordered windows from Tiling (placeholder)");
-        return []; // Placeholder
+        if (Tiling && Tiling.spaces) {
+            let activeSpace = Tiling.spaces.getActiveSpace();
+            if (activeSpace) {
+                this._log(`Fetching windows for workspace: ${activeSpace.workspace.index()}`);
+                let windows = activeSpace.getWindows(); // getWindows() in tiling.js returns a flat array
+                return windows || [];
+            } else {
+                this._logError('Could not get active space to fetch windows.');
+                return []; // Return empty array if no active space
+            }
+        } else {
+            this._logError('Tiling module or spaces object not accessible for fetching windows.');
+            return []; // Return empty array if Tiling/spaces not accessible
+        }
+        // Ensure a value is always returned, even if it's caught by an implicit undefined before.
+        // However, the above logic covers all paths to return [].
     }
 
     _getPlaceholderWindows() {
